@@ -1,0 +1,76 @@
+version: '3.8'
+
+services:
+  # Custom app with OpenJDK 17 and Node.js
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: my-app-image
+    container_name: my-app-container
+    ports:
+      - "8080:8080"  # Expose your app port (adjust as needed)
+    environment:
+      - NODE_ENV=production
+    depends_on:
+      - rabbitmq
+      - mongo
+      - clamav
+      - gotenberg
+    # Uncomment if your app needs health check
+    # healthcheck:
+    #   test: ["CMD", "curl", "-f", "http://localhost:8080/ping"]
+    #   interval: 30s
+    #   retries: 3
+
+  # RabbitMQ Service
+  rabbitmq:
+    image: rabbitmq:3.9.13
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"
+    healthcheck:
+      test: ["CMD", "rabbitmqctl", "status"]
+      interval: 10s
+      retries: 5
+
+  # ClamAV Service
+  clamav:
+    image: public.ecr.aws/e1o2f4x8/setkeeper/clamav:1.0
+    container_name: clamav
+    healthcheck:
+      test: ["CMD", "clamdscan", "--version"]
+      interval: 10s
+      retries: 5
+
+  # Gotenberg Service
+  gotenberg:
+    image: public.ecr.aws/e1o2f4x8/setkeeper/gotenberg:7.10.2
+    container_name: gotenberg
+    ports:
+      - "3000:3000"
+    # Uncomment to enable health check
+    # healthcheck:
+    #   test: ["CMD", "curl", "-f", "http://localhost:3000/ping"]
+    #   interval: 10s
+    #   retries: 5
+
+  # MongoDB Service
+  mongo:
+    image: mongo:5.0
+    container_name: mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - backend
+
+# Volumes to persist MongoDB data
+volumes:
+  mongo-data:
+
+# Networks (optional)
+networks:
+  backend:
+    driver: bridge
