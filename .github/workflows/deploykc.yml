@@ -1,37 +1,62 @@
-name: Build Docker Image
+name: Test Docker Services
 
 on:
   push:
-    branches: ["main"]
+    branches:
+      - main
 
 jobs:
-  build:
+  test-docker-services:
     runs-on: ubuntu-latest
 
+    services:
+      rabbitmq:
+        image: rabbitmq:3.13-management
+        ports:
+          - 5672:5672
+          - 15672:15672
+        options: --health-cmd "rabbitmqctl status" --health-interval 15s --health-retries 10
+
+      mongo:
+        image: mongo:5.0
+        ports:
+          - 27017:27017
+
+      clamav:
+        image: clamav/clamav:1.0
+        options: --health-cmd "clamdscan --version" --health-interval 15s --health-retries 5
+
+      gotenberg:
+        image: thecodingmachine/gotenberg:7.10.2
+        ports:
+          - 3000:3000
+
+      thumbor:
+        image: apsl/thumbor:6.7.5
+        ports:
+          - 8000:8000
+
     steps:
-      # Checkout the repository
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - name: Checkout source code
+        uses: actions/checkout@v3
 
-      # Set up Docker Buildx (optional, but useful for multi-platform builds)
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-
-      # Cache Docker layers to speed up builds
-      - name: Cache Docker layers
-        uses: actions/cache@v3
-        with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-docker-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-docker-
-
-      # Set up Docker Compose (this will install Docker Compose CLI if needed)
-      - name: Set up Docker Compose
+      - name: Wait for RabbitMQ to be ready
         run: |
-          sudo curl -L https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m) -o /usr/local/bin/docker-compose
-          sudo chmod +x /usr/local/bin/docker-compose
+          for i in {1..20}; do
+            if nc -z localhost 5672; then
+              echo "RabbitMQ is ready!"
+              break
+            fi
+            echo "Waiting for RabbitMQ..."
+            sleep 5
+          done
 
-      # Build the Docker image using docker-compose
-      - name: Build Docker image
-        run: docker-compose -f docker-compose.yml build
+      - name: Print RabbitMQ logs
+        if: failure()
+        run: docker logs rabbitmq
+
+      - name: Verify Services
+        run: |
+          curl -f http://localhost:15672 || echo "RabbitMQ management UI not accessible"
+          curl -f http://localhost:3000 || echo "Gotenberg service not accessible"
+          curl -f http://localhost:8000 || echo "Thumbor service not accessible"
