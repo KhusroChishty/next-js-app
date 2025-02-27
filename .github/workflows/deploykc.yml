@@ -39,6 +39,16 @@ jobs:
     steps:
       - name: Checkout source code
         uses: actions/checkout@v3
+      - name: Setup Maven
+        uses: actions/setup-java@v3
+        with:
+         distribution: 'temurin'
+         java-version: '17'
+  
+      - name: Check Java and Maven Versions
+        run: |
+          java -version
+          mvn -version
 
       - name: Wait for RabbitMQ to be ready
         run: |
@@ -51,7 +61,7 @@ jobs:
             sleep 5
           done
       - name: Build with Maven
-        run: mvn clean install
+        run: mvn clean install -X -B
 
       - name: Run Tests
         run: mvn test
